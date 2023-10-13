@@ -12,8 +12,6 @@ import { filterUserForClient } from "~/server/helpers/filterUserForClient";
 import { type Post } from "@prisma/client";
 
 const addUserDataToPosts = async (posts: Post[]) => {
-  // TODO document why this async arrow function is empty
-
 
         const users = (await clerkClient.users.getUserList({
             userId: posts.map((post) => post.authorId),
@@ -47,15 +45,31 @@ const ratelimit = new Ratelimit({
     redis: Redis.fromEnv(),
     limiter: Ratelimit.slidingWindow(3, "1 m"),
     analytics: true,
-    /**
-     * Optional prefix for the keys used in redis. This is useful if you want to share a redis
-     * instance with other applications and want to avoid key collisions. The default prefix is
-     * "@upstash/ratelimit"
-     */
     prefix: "@upstash/ratelimit",
 });
 
 export const postsRouter = createTRPCRouter({
+
+    getById: publicProcedure
+        .input(
+            z.object({ 
+                id: z.string()
+            })
+        )
+        .query(async ({ ctx, input }) => {
+            const post = await ctx.db.post.findUnique({
+                where: { id: parseInt(input.id) }
+            });
+            
+            if (!post) {
+                throw new TRPCError({ code: "NOT_FOUND" });
+            }
+
+            return (await addUserDataToPosts([post]))[0];
+        }),
+        
+
+
     getAll: publicProcedure.query(async ({ ctx }) => {
         const posts = await ctx.db.post.findMany({
             take: 100,
