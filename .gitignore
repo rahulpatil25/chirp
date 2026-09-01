@@ -9,8 +9,10 @@
 /coverage
 
 # database
-/prisma/db.sqlite
-/prisma/db.sqlite-journal
+*.db
+*.db-journal
+/prisma/*.db
+/prisma/*.db-journal
 
 # next.js
 /.next/
@@ -40,3 +42,7 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# Next.js regenerates these agent instruction files on every dev run
+/AGENTS.md
+/CLAUDE.md
