@@ -8,6 +8,7 @@
   "scripts": {
     "build": "next build",
     "db:push": "prisma db push",
+    "db:sql": "prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script",
     "db:studio": "prisma studio",
     "dev": "next dev",
     "format": "prettier --write .",
@@ -20,7 +21,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.8.3",
-    "@prisma/adapter-better-sqlite3": "^7.10.0",
+    "@prisma/adapter-libsql": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@tanstack/react-query": "^5.102.8",

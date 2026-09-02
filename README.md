@@ -67,13 +67,14 @@ CI runs `format:check`, `typecheck`, `lint` and `build` on every pull request an
 Validated at startup by `src/env.mjs`, so a missing or malformed value fails fast with a readable
 message instead of at some later request. See `.env.example` for the annotated list.
 
-| Variable                            | Required | Notes                                         |
-| ----------------------------------- | -------- | --------------------------------------------- |
-| `DATABASE_URL`                      | yes      | Defaults to `file:./prisma/dev.db`            |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | yes      | From the Clerk dashboard                      |
-| `CLERK_SECRET_KEY`                  | yes      | From the Clerk dashboard                      |
-| `UPSTASH_REDIS_REST_URL`            | no       | Falls back to an in-memory limiter when unset |
-| `UPSTASH_REDIS_REST_TOKEN`          | no       | Required together with the URL above          |
+| Variable                            | Required | Notes                                                      |
+| ----------------------------------- | -------- | ---------------------------------------------------------- |
+| `DATABASE_URL`                      | yes      | `file:./prisma/dev.db` locally, `libsql://…` in production |
+| `TURSO_AUTH_TOKEN`                  | no       | Required only for a hosted Turso database                  |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | yes      | From the Clerk dashboard                                   |
+| `CLERK_SECRET_KEY`                  | yes      | From the Clerk dashboard                                   |
+| `UPSTASH_REDIS_REST_URL`            | no       | Falls back to an in-memory limiter when unset              |
+| `UPSTASH_REDIS_REST_TOKEN`          | no       | Required together with the URL above                       |
 
 Set `SKIP_ENV_VALIDATION=1` to bypass validation, which is useful for container builds.
 
@@ -92,20 +93,48 @@ src/env.mjs                   Environment schema
 
 ## Deploying
 
-The defaults are tuned for local development; two of them are worth revisiting before you deploy.
+Deployed on Vercel with a [Turso](https://turso.tech) database. Both have free tiers.
 
-**Database.** SQLite on a serverless host resets whenever the instance does. To move to a hosted
-database, change three things so they agree:
+**1. Create the database and apply the schema.** The Prisma CLI cannot push to a `libsql://`
+URL (it rejects the scheme with `P1013`), so the schema is applied directly:
 
-1. `provider` in `prisma/schema.prisma` (`mysql` or `postgresql`) — Prisma does not permit `env()`
-   here, so it has to be a literal.
-2. The driver adapter in `src/server/db.ts` (for example `@prisma/adapter-mariadb`).
-3. `DATABASE_URL` in the deployment environment.
+```bash
+turso db create chirp
+turso db shell chirp < prisma/schema.sql     # regenerate with `npm run db:sql`
+turso db show chirp --url                    # -> DATABASE_URL
+turso db tokens create chirp                 # -> TURSO_AUTH_TOKEN
+```
 
-The `Post` model uses no provider-specific column types, so it ports across all three unchanged.
+**2. Set the environment variables in Vercel** (Project → Settings → Environment Variables):
 
-**Rate limiting.** The in-memory limiter keeps its counters per process, so it does not hold across
-more than one instance. Set the two `UPSTASH_*` variables in any real deployment.
+| Variable                            | Value                           |
+| ----------------------------------- | ------------------------------- |
+| `DATABASE_URL`                      | the `libsql://…` URL from above |
+| `TURSO_AUTH_TOKEN`                  | the token from above            |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | from the Clerk dashboard        |
+| `CLERK_SECRET_KEY`                  | from the Clerk dashboard        |
+| `UPSTASH_REDIS_REST_URL`            | optional, see below             |
+| `UPSTASH_REDIS_REST_TOKEN`          | optional, see below             |
+
+**3. Import the repository on Vercel** and deploy. No build configuration is needed — the
+defaults are correct for Next.js.
+
+### Two things worth doing before sharing the link
+
+- **Use Clerk production keys.** `pk_test_` / `sk_test_` keys belong to a Clerk _development_
+  instance, which is rate-limited and renders a development banner. Create a production
+  instance in the Clerk dashboard, add your Vercel domain to it, and use those keys.
+- **Configure Upstash.** The in-memory rate limiter keeps counters per process, so it does not
+  hold across serverless instances. Create a database at
+  [console.upstash.com](https://console.upstash.com) and set both `UPSTASH_*` variables.
+
+### Using a different database
+
+The datasource `provider` in `prisma/schema.prisma` is `sqlite`, which is correct for both a
+local file and Turso. To move to Postgres or MySQL instead, change that `provider` (Prisma does
+not allow `env()` there), swap the driver adapter in `src/server/db.ts` for the matching one
+(for example `@prisma/adapter-neon`), and update `DATABASE_URL`. The `Post` model uses no
+provider-specific column types, so it ports unchanged.
 
 ## Notes
 

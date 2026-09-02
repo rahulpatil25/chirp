@@ -1,4 +1,4 @@
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { PrismaClient } from "@prisma/client";
 
 import { env } from "~/env.mjs";
@@ -8,13 +8,17 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * Prisma 7 connects through a driver adapter rather than a `url` in the schema. Swapping the
- * datasource `provider` in `prisma/schema.prisma` means swapping this adapter to match — e.g.
- * `@prisma/adapter-mariadb` for MySQL.
+ * Prisma 7 connects through a driver adapter rather than a `url` in the schema. libSQL covers
+ * both ends with one adapter: a local `file:` database in development, and a hosted Turso
+ * database (`libsql://…` plus an auth token) in production. The Prisma datasource `provider`
+ * stays `sqlite` for both, so `prisma/schema.prisma` needs no environment-specific changes.
  */
 const createPrismaClient = () =>
   new PrismaClient({
-    adapter: new PrismaBetterSqlite3({ url: env.DATABASE_URL }),
+    adapter: new PrismaLibSql({
+      url: env.DATABASE_URL,
+      authToken: env.TURSO_AUTH_TOKEN,
+    }),
     log:
       env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
   });

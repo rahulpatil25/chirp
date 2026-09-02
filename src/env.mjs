@@ -13,6 +13,11 @@ export const env = createEnv({
      * because SQLite uses relative paths (`file:./prisma/dev.db`) that URL parsers reject.
      */
     DATABASE_URL: z.string().min(1),
+    /**
+     * Required only for a hosted Turso database (`libsql://…`). A local `file:` database needs
+     * no token, so this stays optional.
+     */
+    TURSO_AUTH_TOKEN: z.string().min(1).optional(),
     CLERK_SECRET_KEY: z.string().min(1),
     /**
      * Upstash is optional. When either variable is missing the app falls back to an in-memory
@@ -40,6 +45,7 @@ export const env = createEnv({
    */
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
+    TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN,
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
