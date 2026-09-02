@@ -5,7 +5,6 @@ import { PageLayout } from "~/components/layout";
 import { PostView } from "~/components/postview";
 import { generateServerSideHelper } from "~/server/helpers/serverSideHelper";
 
-
 const SinglePostPage: NextPage<{ id: string }> = ({ id }) => {
   const { data } = api.posts.getById.useQuery({
     id,

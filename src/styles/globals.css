@@ -1,10 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+@import "tailwindcss";
 
 body {
-    @apply bg-black text-slate-100;
+  @apply bg-black text-slate-100;
 
-    overscroll-behavior: none;
+  overscroll-behavior: none;
 }

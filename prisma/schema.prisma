@@ -1,22 +1,23 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
+// The app talks to SQLite through the libSQL driver adapter (see src/server/db.ts), which
+// serves both a local `file:` database in development and a hosted Turso database in
+// production. Because both speak SQLite, this `provider` is correct for either and needs no
+// environment-specific change -- Prisma does not allow env() here.
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
-  relationMode = "prisma"
+  provider = "sqlite"
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
-
 model Post {
-    id Int @id @default(autoincrement())
-    createdAt DateTime @default(now())
-    content String @db.VarChar(255)
-    authorId String
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  content   String
+  authorId  String
 
-    @@index([authorId])
+  @@index([authorId])
 }

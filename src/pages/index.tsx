@@ -1,24 +1,21 @@
 import { SignInButton, useUser } from "@clerk/nextjs";
-import { api } from "~/utils/api";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
 import Image from "next/image";
-import { LoadingPage, LoadingSpinner } from "~/components/loading";
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { PageLayout } from "~/components/layout";
-import { PostView } from "~/components/postview";
 
-dayjs.extend(relativeTime);
+import { PageLayout } from "~/components/layout";
+import { LoadingPage, LoadingSpinner } from "~/components/loading";
+import { PostView } from "~/components/postview";
+import { api } from "~/utils/api";
 
 const CreatePostWizard = () => {
-  const { user } = useUser();  
+  const { user } = useUser();
 
-  const [ input, setInput ] = useState("");
+  const [input, setInput] = useState("");
 
-  const ctx = api.useContext();
+  const ctx = api.useUtils();
 
-  const { mutate, isLoading: isPosting } = api.posts.create.useMutation({
+  const { mutate, isPending: isPosting } = api.posts.create.useMutation({
     onSuccess: () => {
       setInput("");
       void ctx.posts.getAll.invalidate();
@@ -33,23 +30,20 @@ const CreatePostWizard = () => {
     },
   });
 
-  
-  console.log(user);
-  
   if (!user) return null;
 
   return (
     <div className="flex w-full gap-3">
       <Image
-        src={user.profileImageUrl}
+        src={user.imageUrl}
         alt="Profile Image"
-        className="h-14 w-14 rounded-full" 
+        className="h-14 w-14 rounded-full"
         height={56}
         width={56}
       />
-      <input 
-        className="bg-transparent grow outline-none" 
-        placeholder="Type some emojis!" 
+      <input
+        className="grow bg-transparent outline-none"
+        placeholder="Type some emojis!"
         type="text"
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -63,21 +57,18 @@ const CreatePostWizard = () => {
         }}
         disabled={isPosting}
       />
-      {input !=="" && !isPosting && (
-        <button onClick={() => mutate({ content: input })}>
-        Post
-      </button>
+      {input !== "" && !isPosting && (
+        <button onClick={() => mutate({ content: input })}>Post</button>
       )}
 
       {isPosting && (
         <div className="flex items-center justify-center">
-          <LoadingSpinner size={20}/>
+          <LoadingSpinner size={20} />
         </div>
       )}
     </div>
   );
 };
-
 
 const Feed = () => {
   const { data, isLoading: postsLoading } = api.posts.getAll.useQuery();
@@ -97,33 +88,30 @@ const Feed = () => {
       ))}
     </div>
   );
-
 };
 
-
 export default function Home() {
-
   const { isLoaded: userLoaded, isSignedIn } = useUser();
 
-  //Start fetching asap
+  // Start fetching asap
   api.posts.getAll.useQuery();
 
-  //Return empty div if user isn't loaded
+  // Return empty div if user isn't loaded
   if (!userLoaded) {
     return <div />;
   }
 
   return (
-      <PageLayout>
-        <div className="flex border-b border-slate-400 p-4">
-          {!isSignedIn && (
-            <div className="flex justify-center">
-              <SignInButton />
-            </div>
-          )}
-          {isSignedIn && <CreatePostWizard />}
-        </div>
-        <Feed />
-      </PageLayout>
+    <PageLayout>
+      <div className="flex border-b border-slate-400 p-4">
+        {!isSignedIn && (
+          <div className="flex justify-center">
+            <SignInButton />
+          </div>
+        )}
+        {isSignedIn && <CreatePostWizard />}
+      </div>
+      <Feed />
+    </PageLayout>
   );
 }

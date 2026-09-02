@@ -11,11 +11,9 @@ import { getAuth } from "@clerk/nextjs/server";
 import { TRPCError, initTRPC } from "@trpc/server";
 import { type CreateNextContextOptions } from "@trpc/server/adapters/next";
 import superjson from "superjson";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 
 import { db } from "~/server/db";
-
-
 
 /**
  * This is the actual context you will use in your router. It will be used to process every request
@@ -24,10 +22,8 @@ import { db } from "~/server/db";
  * @see https://trpc.io/docs/context
  */
 export const createTRPCContext = (opts: CreateNextContextOptions) => {
-
   const { req } = opts;
-  const sesh = getAuth(req);
-  const userId = sesh.userId;
+  const { userId } = getAuth(req);
 
   return {
     db,
@@ -51,7 +47,9 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
       data: {
         ...shape.data,
         zodError:
-          error.cause instanceof ZodError ? error.cause.flatten() : null,
+          error.cause instanceof ZodError
+            ? z.flattenError(error.cause as ZodError<Record<string, unknown>>)
+            : null,
       },
     };
   },
@@ -80,12 +78,9 @@ export const createTRPCRouter = t.router;
  */
 export const publicProcedure = t.procedure;
 
-
-const enforceUserIsAuthed = t.middleware(async ({ctx, next}) => {
+const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.userId) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-    });
+    throw new TRPCError({ code: "UNAUTHORIZED" });
   }
 
   return next({
@@ -95,4 +90,10 @@ const enforceUserIsAuthed = t.middleware(async ({ctx, next}) => {
   });
 });
 
+/**
+ * Protected (authenticated) procedure
+ *
+ * This is where authorization is actually enforced — the Clerk middleware only attaches session
+ * state, it does not gate requests.
+ */
 export const privateProcedure = t.procedure.use(enforceUserIsAuthed);

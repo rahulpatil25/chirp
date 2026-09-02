@@ -1,127 +1,115 @@
-import { clerkClient } from "@clerk/nextjs";
+import { clerkClient } from "@clerk/nextjs/server";
+import { type Post } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { createTRPCRouter, privateProcedure, publicProcedure } from "~/server/api/trpc";
-
-
-
-import { Ratelimit } from "@upstash/ratelimit"; // for deno: see above
-import { Redis } from "@upstash/redis"; // see below for cloudflare and fastly adapters
+import {
+  createTRPCRouter,
+  privateProcedure,
+  publicProcedure,
+} from "~/server/api/trpc";
 import { filterUserForClient } from "~/server/helpers/filterUserForClient";
-import { type Post } from "@prisma/client";
+import { getRatelimiter } from "~/server/ratelimit";
 
 const addUserDataToPosts = async (posts: Post[]) => {
+  // An empty `userId` filter would ask Clerk for an arbitrary page of users, so skip the call.
+  if (posts.length === 0) return [];
 
-        const users = (await clerkClient.users.getUserList({
-            userId: posts.map((post) => post.authorId),
-            limit: 100,
-        })).map(filterUserForClient);
+  const client = await clerkClient();
+  const { data } = await client.users.getUserList({
+    userId: posts.map((post) => post.authorId),
+    limit: 100,
+  });
+  const users = data.map(filterUserForClient);
 
-        console.log(users);
+  return posts.map((post) => {
+    const author = users.find((user) => user.id === post.authorId);
 
-        return posts.map((post) => {
-            const author = users.find((user) => user.id === post.authorId)    
+    if (!author?.username)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Author for post not found",
+      });
 
-            if (!author?.username) 
-             throw new TRPCError({ 
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Author for post not found",
-            });
-
-            return {    
-                post,
-                author:{
-                    ...author,
-                    username: author.username,
-                },
-            };
-        });
-}
-
-
-// Create a new ratelimiter, that allows 3 requests per 1 minute
-const ratelimit = new Ratelimit({
-    redis: Redis.fromEnv(),
-    limiter: Ratelimit.slidingWindow(3, "1 m"),
-    analytics: true,
-    prefix: "@upstash/ratelimit",
-});
+    return {
+      post,
+      author: {
+        ...author,
+        username: author.username,
+      },
+    };
+  });
+};
 
 export const postsRouter = createTRPCRouter({
+  getById: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const id = Number.parseInt(input.id, 10);
 
-    getById: publicProcedure
-        .input(
-            z.object({ 
-                id: z.string()
-            })
-        )
-        .query(async ({ ctx, input }) => {
-            const post = await ctx.db.post.findUnique({
-                where: { id: parseInt(input.id) }
-            });
-            
-            if (!post) {
-                throw new TRPCError({ code: "NOT_FOUND" });
-            }
-
-            return (await addUserDataToPosts([post]))[0];
-        }),
-        
-
-
-    getAll: publicProcedure.query(async ({ ctx }) => {
-        const posts = await ctx.db.post.findMany({
-            take: 100,
-            orderBy: [
-                { createdAt: "desc" }
-            ]
+      if (Number.isNaN(id)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid post id",
         });
+      }
 
-        return addUserDataToPosts(posts);
-        
+      const post = await ctx.db.post.findUnique({ where: { id } });
+
+      if (!post) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const [postWithAuthor] = await addUserDataToPosts([post]);
+
+      if (!postWithAuthor) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      return postWithAuthor;
     }),
 
-    getPostsByUserId: publicProcedure
-    .input(
-        z.object({
-            userId: z.string(),
-        })
-    )
+  getAll: publicProcedure.query(async ({ ctx }) => {
+    const posts = await ctx.db.post.findMany({
+      take: 100,
+      orderBy: [{ createdAt: "desc" }],
+    });
+
+    return addUserDataToPosts(posts);
+  }),
+
+  getPostsByUserId: publicProcedure
+    .input(z.object({ userId: z.string() }))
     .query(({ ctx, input }) =>
-        ctx.db.post.findMany({
-            where: {
-                authorId: input.userId,
-            },
-            take: 100,
-            orderBy: [{ createdAt: "desc" }],
+      ctx.db.post
+        .findMany({
+          where: { authorId: input.userId },
+          take: 100,
+          orderBy: [{ createdAt: "desc" }],
         })
-        .then(addUserDataToPosts)
+        .then(addUserDataToPosts),
     ),
 
-    create: privateProcedure
+  create: privateProcedure
     .input(
-        z.object({
-            content: z.string().emoji("Only emojis are allowed").min(1).max(280)
-        })
+      z.object({
+        content: z.emoji("Only emojis are allowed").min(1).max(280),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
-        
-        const authorId = ctx.userId;
-        
-        const { success } = await ratelimit.limit(authorId);
+      const authorId = ctx.userId;
 
-        if (!success) {
-            throw new TRPCError({ code: "TOO_MANY_REQUESTS" });
-        }
+      const { success } = await getRatelimiter().limit(authorId);
 
-        const post = await ctx.db.post.create({
-            data: {
-                authorId,
-                content: input.content,
-            },
-        });
+      if (!success) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS" });
+      }
 
-        return post;
+      return ctx.db.post.create({
+        data: {
+          authorId,
+          content: input.content,
+        },
+      });
     }),
 });
