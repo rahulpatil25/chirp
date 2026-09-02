@@ -12,20 +12,27 @@ type PostWithUser = RouterOutputs["posts"]["getAll"][number];
 export const PostView = (props: PostWithUser) => {
   const { post, author } = props;
 
+  // Only accounts with a username have a profile page, since that is what the route looks up.
+  const displayName = author.username ?? author.firstName ?? "anonymous";
+
   return (
     <div key={post.id} className="flex gap-3 border-b border-slate-400 p-4">
       <Image
         src={author.imageUrl}
         className="h-14 w-14 rounded-full"
-        alt={`@${author.username}'s profile picture`}
+        alt={`${displayName}'s profile picture`}
         height={56}
         width={56}
       />
       <div className="flex flex-col">
         <div className="flex gap-1 text-slate-300">
-          <Link href={`/@${author.username}`}>
-            <span>{`@${author.username} `}</span>
-          </Link>
+          {author.username ? (
+            <Link href={`/@${author.username}`}>
+              <span>{`@${author.username} `}</span>
+            </Link>
+          ) : (
+            <span>{displayName}</span>
+          )}
           <Link href={`/post/${post.id}`}>
             <span className="font-thin">{` · ${dayjs(
               post.createdAt,

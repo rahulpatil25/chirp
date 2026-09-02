@@ -22,22 +22,15 @@ const addUserDataToPosts = async (posts: Post[]) => {
   });
   const users = data.map(filterUserForClient);
 
-  return posts.map((post) => {
+  // An author can be missing (the Clerk account was deleted) or have no username (Clerk only
+  // guarantees one when the Username attribute is required). Neither is worth failing the whole
+  // timeline over, so unattributable posts are dropped and the rest render with a fallback name.
+  return posts.flatMap((post) => {
     const author = users.find((user) => user.id === post.authorId);
 
-    if (!author?.username)
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Author for post not found",
-      });
+    if (!author) return [];
 
-    return {
-      post,
-      author: {
-        ...author,
-        username: author.username,
-      },
-    };
+    return [{ post, author }];
   });
 };
 
